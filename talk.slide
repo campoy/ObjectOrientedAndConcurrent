@@ -1,0 +1,534 @@
+Go: object oriented and concurrent
+Just not the usual way
+
+Francesc Campoy
+Developer Advocate for Go and the Cloud
+@francesc
+campoy@golang.org
+
+* Recording
+
+A recording of this talk is available on YouTube
+
+.link http://youtu.be/Ng8m5VXsn8Q
+
+* What is Go?
+
+Go is an open-source programming language
+
+- created at Google,
+- to solve Google-scale problems.
+
+.image img/gopher.jpg 450 _
+
+* Who uses Go?
+
+Google:
+
+- YouTube
+- dl.google.com
+
+Others:
+
+- dotCloud (Docker)
+- SoundCloud
+- Canonical
+- CloudFlare
+- Mozilla
+- ...
+
+[[http://golang.org/wiki/GoUsers][golang.org/wiki/GoUsers]]
+
+* Who uses Go?
+
+.image img/trends.png _ 800
+
+.caption Google Trends for [[http://www.google.com/trends/explore#q=golang][golang]]
+
+* Let's dive in
+
+* Go is
+
+Go is
+
+- statically typed,
+
+- part of the C family,
+
+- garbage collected,
+
+- statically compiled,
+
+- object oriented,
+
+- concurrency friendly.
+
+And today I will speak about the last two points.
+
+* Object orientation in Go
+
+* Object oriented flavors
+
+Go is Object Oriented, but doesn't have the keywords:
+
+- `class`,
+- `extends`, or
+- `implements`.
+
+* All types are created equal
+
+You can define methods on any type.
+
+	type Door struct {
+		opened bool
+	}
+
+	func (d *Door) Open() {
+		d.opened = true
+	}
+
+	func (d *Door) Close() {
+		d.opened = false
+	}
+
+* All types are created equal (continued)
+
+Also on primitive types.
+
+	type Door bool
+
+	func (d *Door) Open() {
+		*d = true
+	}
+
+	func (d *Door) Close() {
+		*d = false
+	}	
+
+But only in types defined in the same package.
+
+	func (s string) Length() int { return 2*len(s) }
+
+No monkey patching allowed.
+
+* Polymorphism
+
+* Interfaces almost like Java
+
+An interface is a set of methods.
+
+In Java:
+
+	interface Switch {
+		void open();
+		void close();
+	}
+
+In Go:
+
+	type OpenCloser interface {
+		Open()
+		Close()
+	}
+
+* It's all about satisfaction
+
+Java interfaces are satisfied *explicitly*.
+
+Go interfaces are satisfied *implicitly*.
+
+.image //upload.wikimedia.org/wikipedia/commons/thumb/2/29/Rolling_Stones_09.jpg/512px-Rolling_Stones_09.jpg _ 512
+
+.caption Picture by Gorupdebesanez [[http://creativecommons.org/licenses/by-sa/3.0][CC-BY-SA-3.0]], via [[http://commons.wikimedia.org/wiki/File%3ARolling_Stones_09.jpg][Wikimedia Commons]]
+
+* Go: implicit satisfaction
+
+_If_a_type_defines_all_the_methods_of_an_interface,_the_type_satisfies_that_interface._
+
+*Implicit*satisfaction*==*No*"implements"*
+
+Benefits:
+
+- fewer dependencies
+- no type hierarchy
+- organic composition
+
+* Almost like duck typing
+
+Structural subtyping
+
+Think static duck typing, verified at compile time.
+
+It doesn't just sound like a duck, it *is* a duck.
+
+.image img/duck.jpg 400 400
+
+* FuncDraw: an example on interfaces
+
+.image img/funcdraw.png 500 700
+
+* FuncDraw: package parser
+
+Package `parse` provides a parser of strings into functions.
+
+	func Parse(text string) (*Func, error) { ... }
+
+`Func` is a struct type, with an `Eval` method.
+
+	type Func struct { ... }
+
+	func (p *Func) Eval(x float64) float64 { ... }
+
+* FuncDraw: package draw
+
+Package draw generates images given a function.
+
+	func Draw(f *parser.Func) image.Image {
+		for x := start; x < end; x += inc {
+			y := f.Eval(x)
+			...
+		}
+	}
+
+`draw` depends on `parser`
+
+- makes testing hard
+
+Let's use an interface instead
+
+	type Evaluable interface {
+		Eval(float64) float64
+	}
+
+	func Draw(f Evaluable) image.Image { ... }
+
+* Inheritance vs composition
+
+* Inheritance vs composition
+
+Lots of articles have been written about the topic.
+
+In general, composition is preferred to inheritance.
+
+Lets see why.
+
+* Runner
+
+.code src/BadInheritance.java /START_RUNNER/,/END_RUNNER/
+
+* RunCounter is a Runner that counts
+
+.code src/BadInheritance.java /START_COUNTING/,/END_COUNTING/
+
+* Let's run and count
+
+What will this code print?
+
+.code src/BadInheritance.java /START_MAIN/,/END_MAIN/
+
+Of course, this prints:
+
+	running one
+	running two
+	running three
+	my runner ran 6 tasks
+
+Wait! How many?
+
+* My runner ran 6 tasks? Six?
+
+Inheritance causes:
+
+- weak encapsulation,
+- tight coupling,
+- surprising bugs.
+
+.image img/badinheritance.png
+
+* Solution: use composition
+
+.code src/Composition.java /START_COUNTING/,/BREAK_COUNTING/
+
+* Solution: use composition (continued)
+
+.code src/Composition.java /BREAK_COUNTING/,/END_COUNTING/
+
+* Solution: use composition (continued)
+
+*Pros*
+
+- The bug is gone!
+- `Runner` is completely independent of `RunCounter`.
+- The creation of the `Runner` can be delayed until (and if) needed.
+
+*Cons*
+
+- We need to explicitly define the `Runner` methods on `RunCounter`:
+
+	public String getName() { return runner.getName(); }
+
+- This can cause lots of repetition, and eventually bugs.
+
+* There's no inheritance in Go
+
+* There's no inheritance in Go
+
+Let's use composition directly:
+
+# .code src/runner/runner.go /type Task/,/END_TASK/
+
+.code src/runner/runner.go /type Runner/,/END_RUNNER/
+
+All very similar to the Java version.
+
+* RunCounter
+
+`RunCounter` has a `Runner` field.
+
+.code src/runner/runner.go /type RunCounter/,
+
+* Composition in Go
+
+Same pros and cons as the composition version in Java.
+
+We also have the boilerplate to proxy methods from `Runner`.
+
+.code src/runner/runner.go /runner.Name/
+
+But we can remove it!
+
+* Struct embedding
+
+Expressed in Go as unnamed fields in a struct.
+
+It is still *composition*.
+
+The fields and methods of the embedded type are defined on the embedding type.
+
+Similar to inheritance, but the embedded type doesn't know it's embedded.
+
+* Example of struct embedding
+
+Given a type `Person`:
+
+.code src/embedsample.go /Person/,/Hi/
+
+We can define a type `Employee` embedding `Person`:
+
+.code src/embedsample.go /Employee/,/}/
+
+All fields and methods from `Person` are available on `Employee`:
+
+.code src/embedsample.go /var/,/Introduce/
+
+* Struct embedding
+
+.code src/runner/embed.go /type RunCounter2/,
+
+* Is struct embedding like inheritance?
+
+No, it is better!
+
+It is composition.
+
+- You can't reach into another type and change the way it works.
+
+- Method dispatching is explicit.
+
+It is more general.
+
+- Struct embedding of interfaces.
+
+* Is struct embedding like inheritance?
+
+Struct embedding is selective.
+
+.code src/writecounter.go /WriteCounter/,/MAIN/
+
+WriteCounter can be used with any `io.ReadWriter`.
+
+.play src/writecounter.go /func main/,/^}/
+
+* Easy mocking
+
+What if we wanted to fake a part of a `net.Conn`?
+
+	type Conn interface {
+	        Read(b []byte) (n int, err error)
+	        Write(b []byte) (n int, err error)
+	        Close() error
+	        LocalAddr() Addr
+	        RemoteAddr() Addr
+	        SetDeadline(t time.Time) error
+	        SetReadDeadline(t time.Time) error
+	        SetWriteDeadline(t time.Time) error
+	}
+
+I want to test `handleCon`:
+
+.code src/loopback.go /handleCon/
+
+- We could create a `fakeConn` and define all the methods of `Conn` on it.
+
+- But that's a lot of boring code.
+
+* Struct embedding of interfaces
+
+_WARNING_:_Cool_stuff_
+
+If a type T has an embedded field of a type E, all the methods of E will be defined on T.
+
+Therefore, if E is an interface T satisfies E.
+
+* Struct embedding of interfaces (continued)
+
+We can test `handleCon` with the `loopBack` type.
+
+.code src/loopback.go /loopBack/,/^}/
+
+Any calls to the methods of `net.Conn` will fail, since the field is nil.
+
+We redefine the operations we support:
+
+.code src/loopback.go /Read/,
+
+* Concurrency
+
+* Concurrency paradigms: Locks and Mutexes
+
+Acquire and release:
+
+	mutex.acquire()
+	// do something
+	mutex.release()
+
+Harder than it seems:
+
+	try {
+	  mutex.acquire();
+	  try {
+	    // do something
+	  } finally {
+	    mutex.release();
+	  }
+	} catch(InterruptedException ie) {
+	  // ...
+	}
+
+The correctness of the code is hard to prove.
+
+* Concurrency paradigms: Async
+
+Callback based:
+
+- Ruby's EventMachine
+- Python's Twisted
+- NodeJS
+
+Doesn't play well with parallelism.
+
+Code is hard to follow and to debug.
+
+Best practices help: [[http://callbackhell.com]]
+
+* Go concurrency
+
+It is part of the language, not a library.
+
+Based on two concepts:
+
+- goroutines: lightweight threads
+- channels: typed pipes used to communicate and synchronize between goroutines
+
+So cheap you can use them whenever you want.
+
+.image img/funnelin.jpg 300 700
+
+* Sleep and talk
+
+.code src/conc1.go /sleepAndTalk/,/^}/
+
+We want a message per second.
+
+.play src/conc1.go /func main/,/^}/
+
+What if we started all the `sleepAndTalk` concurrently?
+
+Just add `go`!
+
+* Concurrent sleep and talk
+
+.play src/conc2.go /func main/,/^}/
+
+That was fast ...
+
+When the `main` goroutine ends, the program ends.
+
+* Concurrent sleep and talk with more sleeping
+
+.play src/conc3.go /func main/,/^}/
+
+But synchronizing with `Sleep` is a bad idea.
+
+* Communicating through channels
+
+`sleepAndTalk` sends the string into the channel instead of printing it.
+
+.code src/chan.go /sleepAndTalk/,/^}/
+
+We create the channel and pass it to `sleepAndTalk`, then wait for the values to be sent.
+
+.play src/chan.go /func main/,/^}/
+
+* Let's count on the web
+
+We receive the next id from a channel.
+
+.code src/goodcounter.go /nextID/,/^}/
+
+We need a goroutine sending ids into the channel.
+
+.play src/goodcounter.go /func main/,/^}/
+
+[[http://localhost:8080/next]]
+
+* Let's fight!
+
+`select` allows us to chose among multiple channel operations.
+
+.play src/battle.go /battle/,/^}/
+
+Go - [[http://localhost:8080/fight?usr=go]]
+Java - [[http://localhost:8080/fight?usr=java]]
+
+* Chain of gophers
+
+.image img/chain.jpg
+
+Ok, I'm just bragging here
+
+* Chain of gophers
+
+.play src/goroutines.go /func f/,
+
+* Concurrency is very powerful
+
+And there's lots to learn!
+
+- [[http://talks.golang.org/2012/concurrency.slide#1][Go Concurrency Patterns]], by Rob Pike
+- [[http://talks.golang.org/2013/advconc.slide#1][Advanced Concurrency Patterns]], by Sameer Ajmani
+- [[http://talks.golang.org/2012/waza.slide#1][Concurrency is not Parellelism]], by Rob Pike
+
+.image img/busy.jpg
+
+* What to do next?
+
+Learn Go on your browser with [[http://tour.golang.org][tour.golang.org]]
+
+Find more about Go on [[http://golang.org][golang.org]]
+
+Join the community at [[https://groups.google.com/forum/#!forum/Golang-nuts][golang-nuts]]
+
+Link to the slides [[http://talks.godoc.org/github.com/campoy/ObjectOrientedAndConcurrent/talk.slide]]
+
+
